@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SSH_KEY="$HOME/.ssh/id_ed25519"
+SSH_EMAIL="me@jraebrown.com"
+REPO_URL_SSH="git@github.com:jraebrown/jrb.git"
+JRB_DIR="${JRB_DIR:-$HOME/.jrb}"
+
+echo ">>> jrb fix-ssh: ensuring SSH + GitHub are ready…"
+
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+
+if [ ! -f "$SSH_KEY" ]; then
+  echo ">>> Generating new Ed25519 key at $SSH_KEY"
+  ssh-keygen -t ed25519 -C "$SSH_EMAIL" -f "$SSH_KEY" -N ""
+else
+  echo ">>> SSH key already exists: $SSH_KEY"
+fi
+
+eval "$(ssh-agent -s)" >/dev/null 2>&1 || true
+ssh-add "$SSH_KEY" || true
+
+echo ">>> Your public key (add this to GitHub → Settings → SSH and GPG keys):"
+echo
+cat "$SSH_KEY.pub"
+echo
+read -p "Press Enter after you have added this key to GitHub… " _
+
+if ! ssh -o BatchMode=yes -o ConnectTimeout=5 git@github.com 2>/dev/null; then
+  echo "!!! Still cannot reach git@github.com via SSH"
+  exit 1
+fi
+
+git -C "$JRB_DIR" remote remove origin >/dev/null 2>&1 || true
+git -C "$JRB_DIR" remote add origin "$REPO_URL_SSH"
+
+echo ">>> SSH + GitHub should now be ready."

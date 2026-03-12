@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+JRB_DIR="${JRB_DIR:-$HOME/.jrb}"
+
+if [ ! -d "$JRB_DIR/.git" ]; then
+  echo "jrb: not a git checkout at $JRB_DIR"
+  exit 1
+fi
+
+git -C "$JRB_DIR" pull --ff-only
+echo "jrb: updated."

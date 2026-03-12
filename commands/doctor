@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+QUIET=false
+if [ "${1:-}" = "--quiet" ]; then
+  QUIET=true
+fi
+
+log() {
+  $QUIET || echo "$@"
+}
+
+SSH_KEY="$HOME/.ssh/id_ed25519"
+JRB_DIR="${JRB_DIR:-$HOME/.jrb}"
+
+log ">>> jrb doctor: checking SSH + Git…"
+
+if [ ! -f "$SSH_KEY" ]; then
+  log "!!! No SSH key at $SSH_KEY"
+  exit 1
+fi
+log "✓ SSH key exists: $SSH_KEY"
+
+# Only check if agent has keys — do NOT try to load keys
+if ! ssh-add -l >/dev/null 2>&1; then
+  log "!!! ssh-agent has no keys loaded"
+  exit 1
+fi
+log "✓ ssh-agent has keys loaded"
+
+SSH_OUTPUT="$(ssh -o ConnectTimeout=5 -T git@github.com 2>&1 || true)"
+
+if [[ "$SSH_OUTPUT" == *"successfully authenticated"* ]]; then
+  log "✓ GitHub reachable via SSH"
+else
+  log "!!! GitHub SSH authentication failed"
+  log "$SSH_OUTPUT"
+  exit 1
+fi
+
+REMOTE_URL="$(git -C "$JRB_DIR" remote get-url origin 2>/dev/null || echo "")"
+if [ -z "$REMOTE_URL" ]; then
+  log "!!! No origin remote set"
+  exit 1
+fi
+
+if [[ "$REMOTE_URL" != git@github.com:* ]]; then
+  log "!!! origin is not using SSH: $REMOTE_URL"
+  exit 1
+fi
+log "✓ origin uses SSH: $REMOTE_URL"
+
+log ">>> jrb doctor: OK"
+

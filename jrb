@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+JRB_DIR="${JRB_DIR:-$HOME/.jrb}"
+CMD_DIR="$JRB_DIR/commands"
+
+cmd="${1:-}"
+if [ -z "$cmd" ]; then
+  echo "Usage: jrb <command> [args...]"
+  echo "Available commands:"
+  ls "$CMD_DIR"
+  exit 1
+fi
+shift
+
+if [ -x "$CMD_DIR/$cmd" ]; then
+  exec "$CMD_DIR/$cmd" "$@"
+else
+  echo "jrb: unknown command '$cmd'"
+  echo "Available commands:"
+  ls "$CMD_DIR"
+  exit 1
+fi

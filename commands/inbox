@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -lt 1 ]; then
+  echo "Usage: jrb inbox <file> [more files...]"
+  exit 1
+fi
+
+INBOX_DIR="${JRB_INBOX_DIR:-$HOME/.jrb/inbox}"
+mkdir -p "$INBOX_DIR"
+
+cp -v "$@" "$INBOX_DIR/"
+
+if [ -d "$HOME/.jrb/.git" ]; then
+  "$HOME/.jrb/commands/sync"
+fi

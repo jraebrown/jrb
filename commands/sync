@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+JRB_DIR="${JRB_DIR:-$HOME/.jrb}"
+
+if [ ! -d "$JRB_DIR/.git" ]; then
+  echo "jrb: ~/.jrb is not a git repo — cannot sync"
+  exit 1
+fi
+
+if ! "$JRB_DIR/commands/doctor" --quiet; then
+  echo "jrb: doctor failed — refusing to sync"
+  exit 1
+fi
+
+cd "$JRB_DIR"
+
+git add -A
+git commit -m "jrb sync: $(date -Iseconds)" || true
+
+if ! git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+  echo ">>> Setting upstream to origin/main"
+  git push --set-upstream origin main
+else
+  git push
+fi
+
+echo "jrb: synced to GitHub."
