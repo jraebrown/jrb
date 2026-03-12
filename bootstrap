@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+JRB_DIR="$HOME/.jrb"
+BIN_DIR="$HOME/.local/bin"
+
+echo ">>> Installing jrb environment…"
+
+mkdir -p "$JRB_DIR/commands"
+mkdir -p "$JRB_DIR/completion"
+mkdir -p "$BIN_DIR"
+
+###############################################
+# Install dispatcher
+###############################################
+cat > "$BIN_DIR/jrb" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+CMD="$1"
+shift || true
+
+if [ -x "$HOME/.jrb/commands/$CMD" ]; then
+  exec "$HOME/.jrb/commands/$CMD" "$@"
+else
+  echo "jrb: unknown command: $CMD"
+  exit 1
+fi
+EOF
+
+chmod +x "$BIN_DIR/jrb"
+
+###############################################
+# Install commands
+###############################################
+
+# doctor
+cat > "$JRB_DIR/commands/doctor" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+QUIET=false
+[[ "${1:-}" == "--quiet" ]] && QUIET=true
+
+log() { $QUIET || echo "$@"; }
+
+SSH_KEY="$HOME/.ssh/id_ed25519"
+JRB_DIR="$HOME/.jrb"
+
+log ">>> jrb doctor: checking SSH + Git…"
+
+[[ -f "$SSH_KEY" ]] || { log "!!! No SSH key at $SSH_KEY"; exit 1; }
+log "✓ SSH key exists"
+
+ssh-add -l >/dev/null 2>&1 || { log "!!! ssh-agent has no keys loaded"; exit 1; }
+log "✓ ssh-agent has keys loaded"
+
+SSH_OUTPUT="$(ssh -T git@github.com 2>&1 || true)"
+if [[ "$SSH_OUTPUT" == *"successfully authenticated"* ]]; then
+  log "✓ GitHub reachable via SSH"
+else
+  log "!!! GitHub SSH authentication failed"
+  log "$SSH_OUTPUT"
+  exit 1
+fi
+
+REMOTE_URL="$(git -C "$JRB_DIR" remote get-url origin 2>/dev/null || echo "")"
+[[ -n "$REMOTE_URL" ]] || { log "!!! No origin remote set"; exit 1; }
+
+if [[ "$REMOTE_URL" != git@github.com:* ]]; then
+  log "!!! origin is not using SSH: $REMOTE_URL"
+  exit 1
+fi
+
+log "✓ origin uses SSH"
+log ">>> jrb doctor: OK"
+EOF
+
+chmod +x "$JRB_DIR/commands/doctor"
+
+# sync
+cat > "$JRB_DIR/commands/sync" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+JRB_DIR="$HOME/.jrb"
+
+# doctor must pass
+if ! "$JRB_DIR/commands/doctor" --quiet; then
+  echo "jrb: doctor failed — refusing to sync"
+  exit 1
+fi
+
+cd "$JRB_DIR"
+
+git add -A
+git commit -m "jrb sync: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" || true
+
+# ensure upstream
+if ! git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+  git branch --set-upstream-to=origin/main main
+fi
+
+git pull --rebase
+git push
+EOF
+
+chmod +x "$JRB_DIR/commands/sync"
+
+# inbox (placeholder)
+cat > "$JRB_DIR/commands/inbox" <<'EOF'
+#!/usr/bin/env bash
+echo "Inbox not yet implemented"
+EOF
+chmod +x "$JRB_DIR/commands/inbox"
+
+# update (placeholder)
+cat > "$JRB_DIR/commands/update" <<'EOF'
+#!/usr/bin/env bash
+echo "Update not yet implemented"
+EOF
+chmod +x "$JRB_DIR/commands/update"
+
+###############################################
+# Git initialisation
+###############################################
+
+cd "$JRB_DIR"
+
+# ignore macOS noise
+echo ".DS_Store" >> .gitignore
+
+if [ ! -d ".git" ]; then
+  git init -b main
+  git add -A
+  git commit -m "Initial jrb bootstrap"
+fi
+
+echo ">>> jrb bootstrap complete."
+echo "Ensure ~/.local/bin is in your PATH."
